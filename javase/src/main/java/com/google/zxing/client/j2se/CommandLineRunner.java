@@ -49,14 +49,29 @@ public final class CommandLineRunner {
 
   public static void main(String[] args) throws Exception {
     DecoderConfig config = new DecoderConfig();
-    JCommander jCommander = new JCommander(config, args);
+    JCommander jCommander = new JCommander(config);
+    jCommander.parse(args);
     jCommander.setProgramName(CommandLineRunner.class.getSimpleName());
     if (config.help) {
       jCommander.usage();
       return;
     }
 
-    List<URI> inputs = config.inputPaths;
+    List<URI> inputs = new ArrayList<>(config.inputPaths.size());
+    for (String inputPath : config.inputPaths) {
+      URI uri;
+      try {
+        uri = new URI(inputPath);
+      } catch (URISyntaxException use) {
+        // Assume it must be a file
+        if (!Files.exists(Paths.get(inputPath))) {
+          throw use;
+        }
+        uri = new URI("file", inputPath, null);
+      }
+      inputs.add(uri);
+    }
+
     do {
       inputs = retainValid(expand(inputs), config.recursive);
     } while (config.recursive && isExpandable(inputs));
@@ -90,7 +105,7 @@ public final class CommandLineRunner {
     }
   }
 
-  private static List<URI> expand(List<URI> inputs) throws IOException, URISyntaxException {
+  private static List<URI> expand(List<URI> inputs) throws IOException {
     List<URI> expanded = new ArrayList<>();
     for (URI input : inputs) {
       if (isFileOrDir(input)) {
@@ -111,7 +126,7 @@ public final class CommandLineRunner {
     for (int i = 0; i < expanded.size(); i++) {
       URI input = expanded.get(i);
       if (input.getScheme() == null) {
-        expanded.set(i, new URI("file", input.getSchemeSpecificPart(), input.getFragment()));
+        expanded.set(i, Paths.get(input.getRawPath()).toUri());
       }
     }
     return expanded;
